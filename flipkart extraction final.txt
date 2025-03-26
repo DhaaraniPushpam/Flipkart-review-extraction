@@ -1,0 +1,95 @@
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+import time
+
+# Path to ChromeDriver
+chrome_driver_path = r"C:\Users\New\Downloads\chromedriver-win64\chromedriver-win64\chromedriver.exe"
+service = Service(executable_path=chrome_driver_path)
+
+
+def scrape_flipkart_reviews(driver, product_url):
+    driver.get(product_url)
+    time.sleep(5)  # Allow page to load
+    reviews_data = []
+
+    while True:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")  # Scroll down
+        time.sleep(20)  # Reduced waiting time
+
+        reviews = driver.find_elements(By.XPATH, "//div[contains(@class, 'col EPCmJX Ma1fCG')]")
+
+        print(f"Found {len(reviews)} reviews on this page.")  # Debugging
+
+        for review in reviews:
+            try:
+                # Extract reviewer name
+                name = review.find_element(By.CLASS_NAME, "_2NsDsF").text.strip()
+                
+                # Extract Certified Buyer status and location
+                buyer_info = review.find_element(By.CLASS_NAME, "MztJPv").text.strip()
+
+                # Extract review date
+                date_elements = review.find_elements(By.CLASS_NAME, "_2NsDsF")
+                date = date_elements[1].text.strip() if len(date_elements) > 1 else "N/A"
+
+                # Extract rating
+                rating = review.find_element(By.CLASS_NAME, "XQDdHH").text.strip()
+
+                # Extract review title
+                review_title = review.find_element(By.CLASS_NAME, "z9E0IG").text.strip()
+
+                # Extract review text
+                review_text = review.find_element(By.CLASS_NAME, "ZmyHeo").text.strip()
+
+                # Extract likes and dislikes
+                like_dislike = review.find_elements(By.CLASS_NAME, "tl9VpF")
+                likes = like_dislike[0].text.strip() if len(like_dislike) > 0 else "0"
+                dislikes = like_dislike[1].text.strip() if len(like_dislike) > 1 else "0"
+
+                reviews_data.append({
+                    "Reviewer Name": name,
+                    "Certified Buyer & Location": buyer_info,
+                    "Review Date": date,
+                    "Star Rating": rating,
+                    "Review Title": review_title,
+                    "Review Text": review_text,
+                    "Helpful Votes (Likes)": likes,
+                    "Unhelpful Votes (Dislikes)": dislikes
+                })
+            except Exception as e:
+                print(f"Error extracting review: {e}")
+
+
+        try:
+            next_button = driver.find_element(By.XPATH, "//span[contains(text(), 'Next')]")
+            next_button.click()
+            time.sleep(5)
+        except:
+            print("No more pages to traverse.")
+            break
+
+    return reviews_data
+
+
+def main():
+    driver = webdriver.Chrome(service=service)
+    product_url = "https://www.flipkart.com/maybelline-new-york-call-me-colossal-kit-mascara-kajal-bold-liner-micellar/product-reviews/itme0d5a653ce45c?pid=KJLG53PTVRAFDDMZ&lid=LSTKJLG53PTVRAFDDMZBAH1LQ&mid=FLIPKART&cat=Makeup&vert=Kajal&pageUID=1740905547505"
+
+    print(f"Extracting reviews from: {product_url}")
+    reviews = scrape_flipkart_reviews(driver, product_url)
+
+    if reviews:
+        df = pd.DataFrame(reviews)
+        output_filename = "Flipkart_Reviews.xlsx"
+        df.to_excel(output_filename, index=False)
+        print(f"Reviews saved to {output_filename}")
+    else:
+        print("No reviews found. Check XPath or page loading issues.")
+
+    driver.quit()
+
+
+if __name__ == "__main__":
+    main()
